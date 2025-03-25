@@ -67,10 +67,10 @@ class TexturedMeshModel(nn.Module):
             cache_exists_flag = vt_cache.exists() and ft_cache.exists()
 
         run_xatlas = False
-        if self.mesh.vt is not None and self.mesh.ft is not None \
-                and self.mesh.vt.shape[0] > 0 and self.mesh.ft.min() > -1:
-            vt = self.mesh.vt.to(self.device)
-            ft = self.mesh.ft.to(self.device)
+        if self.mesh.has_valid_uv_mapping() and self.mesh.vt is not None and self.mesh.ft is not None \
+                    and self.mesh.vt.shape[0] > 0 and self.mesh.ft.min() > -1:
+                vt = self.mesh.vt.to(self.device)
+                ft = self.mesh.ft.to(self.device)
         elif cache_exists_flag:
             vt = torch.load(vt_cache).to(self.device)
             ft = torch.load(ft_cache).to(self.device)

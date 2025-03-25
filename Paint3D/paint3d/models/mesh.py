@@ -57,6 +57,16 @@ class Mesh:
             if os.path.exists(merge_texture_path):
                 os.system("mv {} {}".format(os.path.join(os.path.dirname(mesh_path), "material_0.png"), intermediate_dir))
 
+    def has_valid_uv_mapping(self):
+        """Check if the mesh has valid UV coordinates"""
+        if self.vt is None or self.ft is None:
+            return False
+        if self.vt.shape[0] == 0:  # No UV vertices
+            return False
+        if self.ft.min() <= -1:  # Invalid UV face indices
+            return False
+        return True
+
     def preprocess_gltf(self, mesh_path, remove_mesh_part_names, remove_unsupported_buffers):
         with open(mesh_path, "r") as fr:
             gltf_json = json.load(fr)
