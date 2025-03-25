@@ -138,8 +138,18 @@ class TexturedMeshModel(nn.Module):
         # 4. Restore original center position
         v += self.mesh.original_center
 
-        # Handle Y/Z swap if needed
+        # 5. Handle Y/Z swap
         v[:, [1, 2]] = v[:, [2, 1]]  # Swap Y and Z coordinates
+
+        # 6. Apply -90 degree rotation around X axis to fix Blender import
+        # Rotation matrix for -90 degrees around X axis
+        angle = -90 * np.pi / 180
+        rot_matrix = torch.tensor([[1, 0, 0],
+                                    [0, np.cos(angle), -np.sin(angle)],
+                                    [0, np.sin(angle), np.cos(angle)]], device=v.device)
+
+        # Apply rotation
+        v = torch.matmul(v, rot_matrix.T)
 
         f = self.mesh.faces.int()
         v_np = v.cpu().numpy()  # [N, 3]
