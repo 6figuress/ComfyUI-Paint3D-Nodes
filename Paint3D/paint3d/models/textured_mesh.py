@@ -145,8 +145,10 @@ class TexturedMeshModel(nn.Module):
         # Rotation matrix for -90 degrees around X axis
         angle = -90 * np.pi / 180
         rot_matrix = torch.tensor([[1, 0, 0],
-                                    [0, np.cos(angle), -np.sin(angle)],
-                                    [0, np.sin(angle), np.cos(angle)]], device=v.device)
+                                  [0, np.cos(angle), -np.sin(angle)],
+                                  [0, np.sin(angle), np.cos(angle)]],
+                                  device=v.device,
+                                  dtype=v.dtype)  # Match the dtype of the vertices
 
         # Apply rotation
         v = torch.matmul(v, rot_matrix.T)
