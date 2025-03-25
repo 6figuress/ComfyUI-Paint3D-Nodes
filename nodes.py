@@ -368,7 +368,7 @@ class TrainConfigPipe:
 
     def pipe(self, train_config: TrainConfig):
         batch_size = 1
-        width = train_config.render.grid_size * 2
+        width = train_config.render.grid_size
         height = train_config.render.grid_size
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         latent = {"samples": torch.zeros([batch_size, 4, height // 8, width // 8], device=device)}
@@ -696,6 +696,24 @@ class SaveUVMapImage:
 
         return (mesh_model, )
 
+class DuplicateImageHorizontally:
+    RETURN_TYPES = ("IMAGE",)
+    FUNCTION = "duplicate"
+    CATEGORY = "Paint3D"
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            }
+        }
+
+    def duplicate(self, image: torch.Tensor):
+        # Duplicate the image horizontally by concatenating it with itself
+        duplicated = torch.cat([image, image], dim=2)  # Concatenate along width dimension
+        return (duplicated,)
+
 
 NODE_CLASS_MAPPINGS = {
     "3D_GenerateDepthImage": GenerateDepthImage,
@@ -708,4 +726,5 @@ NODE_CLASS_MAPPINGS = {
     "3D_SaveUVMapImage": SaveUVMapImage,
     "3D_TrainConfigPipe": TrainConfigPipe,
     "3D_GenerateSingleDepthImage": GenerateSingleDepthImage,
+    "3D_DuplicateImageHorizontally": DuplicateImageHorizontally,
 }
