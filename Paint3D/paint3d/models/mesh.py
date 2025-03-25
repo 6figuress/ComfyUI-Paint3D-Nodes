@@ -92,12 +92,11 @@ class Mesh:
         return updated_mesh_path
 
     def normalize_mesh(self, target_scale=1.0, mesh_dy=0.0):
-
         verts = self.vertices
-        center = verts.mean(dim=0)
-        verts = verts - center
-        scale = torch.max(torch.norm(verts, p=2, dim=1))
-        verts = verts / scale
+        self.original_center = verts.mean(dim=0)  # Store original center
+        verts = verts - self.original_center
+        self.original_scale = torch.max(torch.norm(verts, p=2, dim=1))  # Store original scale
+        verts = verts / self.original_scale
         verts *= target_scale
         verts[:, 1] += mesh_dy
         self.vertices = verts

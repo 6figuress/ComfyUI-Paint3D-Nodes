@@ -120,7 +120,8 @@ class TexturedMeshModel(nn.Module):
                                         texture_img.save(os.path.join(path, f'albedo_before.png'))))
             texture_img_post.save(os.path.join(path, f'albedo.png'))
 
-        if export_texture_only: return texture_img
+        if export_texture_only:
+            return texture_img
 
         # Get vertices and reverse the normalization
         v = self.mesh.vertices.clone()  # Clone to not modify original
@@ -131,21 +132,14 @@ class TexturedMeshModel(nn.Module):
         # 2. Remove target scale
         v /= self.cfg.guide.shape_scale
 
-        # 3. Restore original scale (multiply by original max radius)
-        # Load with trimesh and swap Y/Z
-        original_mesh = trimesh.load(self.cfg.guide.shape_path)
-        original_verts = original_mesh.vertices.copy()
-        # Swap Y and Z coordinates to match coordinate system
-        original_verts[:, [1, 2]] = original_verts[:, [2, 1]]
-        original_verts = torch.from_numpy(original_verts).to(v.device)
-
-        original_center = original_verts.mean(dim=0)
-        centered_verts = original_verts - original_center
-        original_scale = torch.max(torch.norm(centered_verts, p=2, dim=1))
-        v *= original_scale
+        # 3. Restore original scale
+        v *= self.mesh.original_scale
 
         # 4. Restore original center position
-        v += original_center
+        v += self.mesh.original_center
+
+        # Handle Y/Z swap if needed
+        v[:, [1, 2]] = v[:, [2, 1]]  # Swap Y and Z coordinates
 
         f = self.mesh.faces.int()
         v_np = v.cpu().numpy()  # [N, 3]
