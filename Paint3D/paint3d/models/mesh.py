@@ -35,11 +35,11 @@ class Mesh:
         else:
             raise ValueError(f"{mesh_path} extension not implemented in mesh reader.")
 
-        self.vertices = mesh.vertices.to(device)    
-        self.faces = mesh.faces.to(device)          
+        self.vertices = mesh.vertices.to(device)
+        self.faces = mesh.faces.to(device)
         try:
-            self.vt = mesh.uvs                          
-            self.ft = mesh.face_uvs_idx                 
+            self.vt = mesh.uvs
+            self.ft = mesh.face_uvs_idx
         except AttributeError:
             self.vt = None
             self.ft = None
@@ -56,6 +56,16 @@ class Mesh:
             os.system("mv {} {}".format(os.path.join(os.path.dirname(mesh_path), "material.mtl"), intermediate_dir))
             if os.path.exists(merge_texture_path):
                 os.system("mv {} {}".format(os.path.join(os.path.dirname(mesh_path), "material_0.png"), intermediate_dir))
+
+    def has_valid_uv_mapping(self):
+        """Check if the mesh has valid UV coordinates"""
+        if self.vt is None or self.ft is None:
+            return False
+        if self.vt.shape[0] == 0:  # No UV vertices
+            return False
+        if self.ft.min() <= -1:  # Invalid UV face indices
+            return False
+        return True
 
     def preprocess_gltf(self, mesh_path, remove_mesh_part_names, remove_unsupported_buffers):
         with open(mesh_path, "r") as fr:
@@ -92,13 +102,15 @@ class Mesh:
         return updated_mesh_path
 
     def normalize_mesh(self, target_scale=1.0, mesh_dy=0.0):
-
         verts = self.vertices
-        center = verts.mean(dim=0)
-        verts = verts - center
-        scale = torch.max(torch.norm(verts, p=2, dim=1))   
-        verts = verts / scale
-        verts *= target_scale    
-        verts[:, 1] += mesh_dy   
+        self.original_center = verts.mean(dim=0)  # Store original center
+        verts = verts - self.original_center
+        self.original_scale = torch.max(torch.norm(verts, p=2, dim=1))  # Store original scale
+        verts = verts / self.original_scale
+        verts *= target_scale
+        verts[:, 1] += mesh_dy
         self.vertices = verts
 
+        # remove any rescaling
+        # and translation of the mesh
+        # pass

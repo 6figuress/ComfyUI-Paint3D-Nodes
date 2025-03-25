@@ -350,11 +350,11 @@ class TrainConfigPipe:
     RETURN_TYPES = (
     "TRAINCONFIG", "MODEL", "CLIP", "VAE", comfy.samplers.KSampler.SAMPLERS, comfy.samplers.KSampler.SCHEDULERS, "CONDITIONING",
     "CONDITIONING", "INT", "INT", "FLOAT", "FLOAT", "INT", "FLOAT", "FLOAT", "FLOAT", "CONTROL_NET", "FLOAT", "CONTROL_NET",
-    "INT", "INT", "INT", "INT", "INT", "INT", "LATENT")
+    "INT", "INT", "INT", "INT", "INT", "INT", "LATENT", "LATENT")
     RETURN_NAMES = (
     "train_config", "ckpt", "clip", "vae", "sampler_name", "scheduler", "positive", "negative", "seed", "txt2img_steps", "txt2img_cfg",
     "txt2img_denoise", "inpaint_steps", "inpaint_cfg", "inpaint_denoise", "depth_strength", "depth_controlnet",
-    "inpaint_strength", "inpaint_controlnet", "cam_front", "cam_back", "cam_left", "cam_right", "cam_top", "cam_bottom", "latent")
+    "inpaint_strength", "inpaint_controlnet", "cam_front", "cam_back", "cam_left", "cam_right", "cam_top", "cam_bottom", "latent", "latent2")
     FUNCTION = "pipe"
     CATEGORY = "Paint3D"
 
@@ -368,11 +368,15 @@ class TrainConfigPipe:
 
     def pipe(self, train_config: TrainConfig):
         batch_size = 1
-        width = train_config.render.grid_size * 2
+        width = train_config.render.grid_size
         height = train_config.render.grid_size
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         latent = {"samples": torch.zeros([batch_size, 4, height // 8, width // 8], device=device)}
-        return train_config, train_config.ckpt, train_config.clip, train_config.vae, train_config.sampler, train_config.scheduler, train_config.positive, train_config.negative, train_config.seed, train_config.txt2img_steps, train_config.txt2img_cfg, train_config.txt2img_denoise, train_config.inpaint_steps, train_config.inpaint_cfg, train_config.inpaint_denoise, train_config.depth_strength, train_config.depth_controlnet, train_config.inpaint_strength, train_config.inpaint_controlnet, train_config.cam_front, train_config.cam_back, train_config.cam_left, train_config.cam_right, train_config.cam_top, train_config.cam_bottom, latent
+        width2 = train_config.render.grid_size * 2
+        # This will create a 128x64 latent (1024/8 = 128, 512/8 = 64)
+        latent2 = {"samples": torch.zeros([batch_size, 4, height // 8, width2 // 8], device=device)}
+
+        return train_config, train_config.ckpt, train_config.clip, train_config.vae, train_config.sampler, train_config.scheduler, train_config.positive, train_config.negative, train_config.seed, train_config.txt2img_steps, train_config.txt2img_cfg, train_config.txt2img_denoise, train_config.inpaint_steps, train_config.inpaint_cfg, train_config.inpaint_denoise, train_config.depth_strength, train_config.depth_controlnet, train_config.inpaint_strength, train_config.inpaint_controlnet, train_config.cam_front, train_config.cam_back, train_config.cam_left, train_config.cam_right, train_config.cam_top, train_config.cam_bottom, latent, latent2
 
 
 class GenerateTextureMeshModel:
@@ -454,6 +458,60 @@ class GenerateDepthImage:
 
         return (tensor_depth_dilated,)
 
+class GenerateSingleDepthImage:
+    RETURN_TYPES = ("IMAGE",)
+    FUNCTION = "generate"
+    CATEGORY = "Paint3D"
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "mesh_model": ("MESHMODEL",),
+                "cam1": ("INT", {"default": 0, "min": 0, "max": 26}),
+            }
+        }
+
+    def dilate_depth_outline(self, img: Image.Image, iters=5, dilate_kernel=3):
+        img_gray = img.convert('L')  # grayscale로 변환
+        img = np.array(img_gray)
+        for i in range(iters):
+            _, mask = cv2.threshold(img, thresh=0, maxval=255, type=cv2.THRESH_BINARY)
+            mask = cv2.GaussianBlur(mask, (3, 3), 0)
+            mask = cv2.erode(mask, np.ones((3, 3), np.uint8))
+            mask = mask / 255
+            img_dilate = cv2.dilate(img, np.ones((dilate_kernel, dilate_kernel), np.uint8))
+            img = (mask * img + (1 - mask) * img_dilate).astype(np.uint8)
+
+        return np.dstack([img.astype(np.uint8)] * 3).copy(order='C')  #  to rgb
+
+    def generate(self, mesh_model: TexturedMeshModel, cam1=0):
+        init_depth_map = []
+        init_rgb_map = []
+
+        train_config = mesh_model.cfg
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        dataset = MultiviewDataset(train_config, device)
+        dataloaders = dataset.dataloader()
+
+        view_angle_info = {i: data for i, data in enumerate(dataloaders)}
+        data = view_angle_info[cam1]
+        theta, phi, radius = data['theta'], data['phi'], data['radius']
+        outputs = mesh_model.render(theta=theta, phi=phi, radius=radius)
+        depth_render = outputs['depth']
+        init_depth_map.append(depth_render)
+        rgb_render = outputs['image']
+        init_rgb_map.append(rgb_render)
+
+        init_depth_map = torch.cat(init_depth_map, dim=0).repeat(1, 3, 1, 1)
+        init_depth_map = torchvision.utils.make_grid(init_depth_map, nrow=1, padding=0)  # CHW
+        init_depth_map = chw_to_bhwc(init_depth_map)
+        depth_pil_img = to_pil_image(tensor=init_depth_map)
+
+        depth_dilated = self.dilate_depth_outline(depth_pil_img, iters=5, dilate_kernel=3)
+        tensor_depth_dilated = to_tensor_image(depth_dilated)
+
+        return (tensor_depth_dilated,)
 
 class ProjectToMeshModel:
     RETURN_TYPES = ("MESHMODEL", "IMAGE",)
@@ -642,6 +700,28 @@ class SaveUVMapImage:
 
         return (mesh_model, )
 
+class DuplicateImageMirrored:
+    RETURN_TYPES = ("IMAGE",)
+    FUNCTION = "duplicate"
+    CATEGORY = "Paint3D"
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+            }
+        }
+
+    def duplicate(self, image: torch.Tensor):
+        # Create mirrored version by flipping vertically
+        mirrored = torch.flip(image, dims=[2])  # Flip along width dimension
+
+        # Concatenate original and mirrored horizontally
+        duplicated = torch.cat([image, mirrored], dim=2)  # Concatenate along width dimension
+
+        return (duplicated,)
+
 
 NODE_CLASS_MAPPINGS = {
     "3D_GenerateDepthImage": GenerateDepthImage,
@@ -653,4 +733,6 @@ NODE_CLASS_MAPPINGS = {
     "3D_GenerateInpaintUVMapMask": GenerateInpaintUVMapMask,
     "3D_SaveUVMapImage": SaveUVMapImage,
     "3D_TrainConfigPipe": TrainConfigPipe,
+    "3D_GenerateSingleDepthImage": GenerateSingleDepthImage,
+    "3D_DuplicateImageMirrored": DuplicateImageMirrored,
 }
