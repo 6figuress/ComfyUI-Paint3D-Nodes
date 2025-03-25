@@ -454,6 +454,60 @@ class GenerateDepthImage:
 
         return (tensor_depth_dilated,)
 
+class GenerateSingleDepthImage:
+    RETURN_TYPES = ("IMAGE",)
+    FUNCTION = "generate"
+    CATEGORY = "Paint3D"
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "mesh_model": ("MESHMODEL",),
+                "cam1": ("INT", {"default": 0, "min": 0, "max": 26}),
+            }
+        }
+
+    def dilate_depth_outline(self, img: Image.Image, iters=5, dilate_kernel=3):
+        img_gray = img.convert('L')  # grayscale로 변환
+        img = np.array(img_gray)
+        for i in range(iters):
+            _, mask = cv2.threshold(img, thresh=0, maxval=255, type=cv2.THRESH_BINARY)
+            mask = cv2.GaussianBlur(mask, (3, 3), 0)
+            mask = cv2.erode(mask, np.ones((3, 3), np.uint8))
+            mask = mask / 255
+            img_dilate = cv2.dilate(img, np.ones((dilate_kernel, dilate_kernel), np.uint8))
+            img = (mask * img + (1 - mask) * img_dilate).astype(np.uint8)
+
+        return np.dstack([img.astype(np.uint8)] * 3).copy(order='C')  #  to rgb
+
+    def generate(self, mesh_model: TexturedMeshModel, cam1=0):
+        init_depth_map = []
+        init_rgb_map = []
+
+        train_config = mesh_model.cfg
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        dataset = MultiviewDataset(train_config, device)
+        dataloaders = dataset.dataloader()
+
+        view_angle_info = {i: data for i, data in enumerate(dataloaders)}
+        data = view_angle_info[cam1]
+        theta, phi, radius = data['theta'], data['phi'], data['radius']
+        outputs = mesh_model.render(theta=theta, phi=phi, radius=radius)
+        depth_render = outputs['depth']
+        init_depth_map.append(depth_render)
+        rgb_render = outputs['image']
+        init_rgb_map.append(rgb_render)
+
+        init_depth_map = torch.cat(init_depth_map, dim=0).repeat(1, 3, 1, 1)
+        init_depth_map = torchvision.utils.make_grid(init_depth_map, nrow=1, padding=0)  # CHW
+        init_depth_map = chw_to_bhwc(init_depth_map)
+        depth_pil_img = to_pil_image(tensor=init_depth_map)
+
+        depth_dilated = self.dilate_depth_outline(depth_pil_img, iters=5, dilate_kernel=3)
+        tensor_depth_dilated = to_tensor_image(depth_dilated)
+
+        return (tensor_depth_dilated,)
 
 class ProjectToMeshModel:
     RETURN_TYPES = ("MESHMODEL", "IMAGE",)
@@ -653,4 +707,5 @@ NODE_CLASS_MAPPINGS = {
     "3D_GenerateInpaintUVMapMask": GenerateInpaintUVMapMask,
     "3D_SaveUVMapImage": SaveUVMapImage,
     "3D_TrainConfigPipe": TrainConfigPipe,
+    "3D_GenerateSingleDepthImage": GenerateSingleDepthImage,
 }
