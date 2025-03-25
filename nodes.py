@@ -711,7 +711,7 @@ class DuplicateImageMirrored:
 
     def duplicate(self, image: torch.Tensor):
         # Create mirrored version by flipping vertically
-        mirrored = torch.flip(image, dims=[1])  # Flip along height dimension
+        mirrored = torch.flip(image, dims=[2])  # Flip along width dimension
 
         # Concatenate original and mirrored horizontally
         duplicated = torch.cat([image, mirrored], dim=2)  # Concatenate along width dimension
