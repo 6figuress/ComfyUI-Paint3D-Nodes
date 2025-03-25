@@ -132,7 +132,13 @@ class TexturedMeshModel(nn.Module):
         v /= self.cfg.guide.shape_scale
 
         # 3. Restore original scale (multiply by original max radius)
-        original_verts = torch.from_numpy(trimesh.load(self.cfg.guide.shape_path).vertices).to(v.device)
+        # Load with trimesh and swap Y/Z
+        original_mesh = trimesh.load(self.cfg.guide.shape_path)
+        original_verts = original_mesh.vertices.copy()
+        # Swap Y and Z coordinates to match coordinate system
+        original_verts[:, [1, 2]] = original_verts[:, [2, 1]]
+        original_verts = torch.from_numpy(original_verts).to(v.device)
+
         original_center = original_verts.mean(dim=0)
         centered_verts = original_verts - original_center
         original_scale = torch.max(torch.norm(centered_verts, p=2, dim=1))
