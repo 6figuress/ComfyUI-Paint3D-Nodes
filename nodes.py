@@ -350,11 +350,11 @@ class TrainConfigPipe:
     RETURN_TYPES = (
     "TRAINCONFIG", "MODEL", "CLIP", "VAE", comfy.samplers.KSampler.SAMPLERS, comfy.samplers.KSampler.SCHEDULERS, "CONDITIONING",
     "CONDITIONING", "INT", "INT", "FLOAT", "FLOAT", "INT", "FLOAT", "FLOAT", "FLOAT", "CONTROL_NET", "FLOAT", "CONTROL_NET",
-    "INT", "INT", "INT", "INT", "INT", "INT", "LATENT")
+    "INT", "INT", "INT", "INT", "INT", "INT", "LATENT", "LATENT")
     RETURN_NAMES = (
     "train_config", "ckpt", "clip", "vae", "sampler_name", "scheduler", "positive", "negative", "seed", "txt2img_steps", "txt2img_cfg",
     "txt2img_denoise", "inpaint_steps", "inpaint_cfg", "inpaint_denoise", "depth_strength", "depth_controlnet",
-    "inpaint_strength", "inpaint_controlnet", "cam_front", "cam_back", "cam_left", "cam_right", "cam_top", "cam_bottom", "latent")
+    "inpaint_strength", "inpaint_controlnet", "cam_front", "cam_back", "cam_left", "cam_right", "cam_top", "cam_bottom", "latent", "latent2")
     FUNCTION = "pipe"
     CATEGORY = "Paint3D"
 
@@ -372,7 +372,11 @@ class TrainConfigPipe:
         height = train_config.render.grid_size
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         latent = {"samples": torch.zeros([batch_size, 4, height // 8, width // 8], device=device)}
-        return train_config, train_config.ckpt, train_config.clip, train_config.vae, train_config.sampler, train_config.scheduler, train_config.positive, train_config.negative, train_config.seed, train_config.txt2img_steps, train_config.txt2img_cfg, train_config.txt2img_denoise, train_config.inpaint_steps, train_config.inpaint_cfg, train_config.inpaint_denoise, train_config.depth_strength, train_config.depth_controlnet, train_config.inpaint_strength, train_config.inpaint_controlnet, train_config.cam_front, train_config.cam_back, train_config.cam_left, train_config.cam_right, train_config.cam_top, train_config.cam_bottom, latent
+        width2 = train_config.render.grid_size * 2
+        # This will create a 128x64 latent (1024/8 = 128, 512/8 = 64)
+        latent2 = {"samples": torch.zeros([batch_size, 4, height // 8, width2 // 8], device=device)}
+
+        return train_config, train_config.ckpt, train_config.clip, train_config.vae, train_config.sampler, train_config.scheduler, train_config.positive, train_config.negative, train_config.seed, train_config.txt2img_steps, train_config.txt2img_cfg, train_config.txt2img_denoise, train_config.inpaint_steps, train_config.inpaint_cfg, train_config.inpaint_denoise, train_config.depth_strength, train_config.depth_controlnet, train_config.inpaint_strength, train_config.inpaint_controlnet, train_config.cam_front, train_config.cam_back, train_config.cam_left, train_config.cam_right, train_config.cam_top, train_config.cam_bottom, latent, latent2
 
 
 class GenerateTextureMeshModel:
