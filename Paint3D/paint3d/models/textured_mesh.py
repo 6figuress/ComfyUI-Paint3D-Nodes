@@ -2,6 +2,7 @@ import os
 import cv2
 import numpy as np
 import kaolin as kal
+import trimesh
 from PIL import Image
 from loguru import logger
 from pathlib import Path
@@ -105,6 +106,7 @@ class TexturedMeshModel(nn.Module):
 
     @torch.no_grad()
     def export_mesh(self, path, obj_filename='mesh', export_texture_only=False):
+        # Save texture first
         texture_img = self.texture_img.permute(0, 2, 3, 1).contiguous().clamp(0, 1)
         texture_img = Image.fromarray((texture_img[0].cpu().detach().numpy() * 255).astype(np.uint8))
         if not os.path.exists(path):
@@ -118,9 +120,28 @@ class TexturedMeshModel(nn.Module):
                                         texture_img.save(os.path.join(path, f'albedo_before.png'))))
             texture_img_post.save(os.path.join(path, f'albedo.png'))
 
-        if export_texture_only: return 0
+        if export_texture_only: return texture_img
 
-        v, f = self.mesh.vertices, self.mesh.faces.int()
+        # Get vertices and reverse the normalization
+        v = self.mesh.vertices.clone()  # Clone to not modify original
+
+        # 1. Remove Y offset
+        v[:, 1] -= self.cfg.render.look_at_height
+
+        # 2. Remove target scale
+        v /= self.cfg.guide.shape_scale
+
+        # 3. Restore original scale (multiply by original max radius)
+        original_verts = torch.from_numpy(trimesh.load(self.cfg.guide.shape_path).vertices).to(v.device)
+        original_center = original_verts.mean(dim=0)
+        centered_verts = original_verts - original_center
+        original_scale = torch.max(torch.norm(centered_verts, p=2, dim=1))
+        v *= original_scale
+
+        # 4. Restore original center position
+        v += original_center
+
+        f = self.mesh.faces.int()
         v_np = v.cpu().numpy()  # [N, 3]
         f_np = f.cpu().numpy()  # [M, 3]
         vt_np = self.vt.detach().cpu().numpy()
@@ -166,8 +187,8 @@ class TexturedMeshModel(nn.Module):
             for material_id, material in enumerate(np.split(np.array(texture_img), w // h, axis=1)):
                 cv2.imwrite(os.path.join(convert_results_dir, "texture_split{}.png".format(material_id)),
                             cv2.cvtColor(material, cv2.COLOR_RGB2BGR))
-        
-        
+
+
         return texture_img
 
     def forward_texturing(self, view_target, theta, phi, radius, save_result_dir, view_id=None, verbose=False):
