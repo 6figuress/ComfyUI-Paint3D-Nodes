@@ -696,7 +696,7 @@ class SaveUVMapImage:
 
         return (mesh_model, )
 
-class DuplicateImageHorizontally:
+class DuplicateImageMirrored:
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "duplicate"
     CATEGORY = "Paint3D"
@@ -710,8 +710,12 @@ class DuplicateImageHorizontally:
         }
 
     def duplicate(self, image: torch.Tensor):
-        # Duplicate the image horizontally by concatenating it with itself
-        duplicated = torch.cat([image, image], dim=2)  # Concatenate along width dimension
+        # Create mirrored version by flipping vertically
+        mirrored = torch.flip(image, dims=[1])  # Flip along height dimension
+
+        # Concatenate original and mirrored horizontally
+        duplicated = torch.cat([image, mirrored], dim=2)  # Concatenate along width dimension
+
         return (duplicated,)
 
 
@@ -726,5 +730,5 @@ NODE_CLASS_MAPPINGS = {
     "3D_SaveUVMapImage": SaveUVMapImage,
     "3D_TrainConfigPipe": TrainConfigPipe,
     "3D_GenerateSingleDepthImage": GenerateSingleDepthImage,
-    "3D_DuplicateImageHorizontally": DuplicateImageHorizontally,
+    "3D_DuplicateImageMirrored": DuplicateImageMirrored,
 }
