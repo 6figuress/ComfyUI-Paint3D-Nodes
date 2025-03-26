@@ -26,23 +26,37 @@ class Mesh:
             is_convert = True
 
         if ".obj" in mesh_path:
+                # Load with trimesh first to get UV coordinates
+            trimesh_mesh = trimesh.load(mesh_path, process=False, maintain_order=True)
+
+            # Get UV coordinates from trimesh
+            if hasattr(trimesh_mesh.visual, 'uv') and trimesh_mesh.visual.uv is not None:
+                self.vt = torch.from_numpy(trimesh_mesh.visual.uv).float().to(device)
+                self.ft = torch.from_numpy(trimesh_mesh.faces).long().to(device)
+                logger.info(f"Loaded UV map from OBJ file: vertices={self.vt.shape}, faces={self.ft.shape}")
+            else:
+                self.vt = None
+                self.ft = None
+                logger.warning("No UV coordinates found in the OBJ file")
+
+            # Load geometry with kaolin
             try:
                 mesh = kal.io.obj.import_mesh(mesh_path, with_normals=True, with_materials=True)
             except:
                 mesh = kal.io.obj.import_mesh(mesh_path, with_normals=True, with_materials=False)
+
+            self.vertices = mesh.vertices.to(device)
+            self.faces = mesh.faces.to(device)
+
         elif ".off" in mesh_path:
             mesh = kal.io.off.import_mesh(mesh_path)
+            self.vertices = mesh.vertices.to(device)
+            self.faces = mesh.faces.to(device)
+            self.vt = None
+            self.ft = None
         else:
             raise ValueError(f"{mesh_path} extension not implemented in mesh reader.")
 
-        self.vertices = mesh.vertices.to(device)
-        self.faces = mesh.faces.to(device)
-        try:
-            self.vt = mesh.uvs
-            self.ft = mesh.face_uvs_idx
-        except AttributeError:
-            self.vt = None
-            self.ft = None
         self.mesh_path = mesh_path
         self.normalize_mesh(target_scale=target_scale, mesh_dy=mesh_dy)
 
@@ -60,11 +74,16 @@ class Mesh:
     def has_valid_uv_mapping(self):
         """Check if the mesh has valid UV coordinates"""
         if self.vt is None or self.ft is None:
+            logger.warning("No UV coordinates found")
             return False
         if self.vt.shape[0] == 0:  # No UV vertices
+            logger.warning("Empty UV vertex array")
             return False
         if self.ft.min() <= -1:  # Invalid UV face indices
+            logger.warning("Invalid UV face indices found")
             return False
+
+        logger.info(f"Valid UV mapping found: UV vertices={self.vt.shape}, UV faces={self.ft.shape}")
         return True
 
     def preprocess_gltf(self, mesh_path, remove_mesh_part_names, remove_unsupported_buffers):

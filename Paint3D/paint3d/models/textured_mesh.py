@@ -26,6 +26,7 @@ class TexturedMeshModel(nn.Module):
         self.cache_path = Path(self.cfg.log.cache_path) / Path(cfg.guide.shape_path).stem
         self.default_color = self.cfg.render.texture_default_color
         self.force_run_xatlas = self.cfg.guide.force_run_xatlas
+        self.force_original_uv = cfg.render.force_original_uv
 
         self.mesh = Mesh(self.cfg.guide.shape_path, self.device, target_scale=self.cfg.guide.shape_scale,
                          mesh_dy=self.cfg.render.look_at_height,
@@ -65,6 +66,11 @@ class TexturedMeshModel(nn.Module):
         else:
             vt_cache, ft_cache = cache_path / 'vt.pth', cache_path / 'ft.pth'
             cache_exists_flag = vt_cache.exists() and ft_cache.exists()
+
+        # Force use of original UV if configured and available
+        if self.force_original_uv and self.mesh.has_valid_uv_mapping():
+            logger.info("Using original UV mapping from OBJ file")
+            return self.mesh.vt.to(self.device), self.mesh.ft.to(self.device)
 
         run_xatlas = False
         if self.mesh.has_valid_uv_mapping() and self.mesh.vt is not None and self.mesh.ft is not None \
