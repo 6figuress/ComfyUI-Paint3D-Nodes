@@ -9,62 +9,39 @@ import kaolin as kal
 class Mesh:
     def __init__(self, mesh_path, device, target_scale=1.0, mesh_dy=0.0,
                  remove_mesh_part_names=None, remove_unsupported_buffers=None, intermediate_dir=None):
-        # from https://github.com/threedle/text2mesh
+        # Initialize attributes
         self.material_cvt, self.material_num, org_mesh_path, is_convert = None, 1, mesh_path, False
         self.vt, self.ft = None, None
-        if not mesh_path.endswith(".obj") and not mesh_path.endswith(".off"):
-            if mesh_path.endswith(".gltf"):
-                mesh_path = self.preprocess_gltf(mesh_path, remove_mesh_part_names, remove_unsupported_buffers)
-            mesh_temp = trimesh.load(mesh_path, force='mesh', process=True, maintain_order=True)
-            mesh_path = os.path.splitext(mesh_path)[0] + "_cvt.obj"
-            mesh_temp.export(mesh_path)
-            merge_texture_path = os.path.join(os.path.dirname(mesh_path), "material_0.png")
-            if os.path.exists(merge_texture_path):
-                self.material_cvt = cv2.imread(merge_texture_path)
-                self.material_num = self.material_cvt.shape[1] // self.material_cvt.shape[0]
-            print("Converting current mesh model to obj file with {} material~".format(self.material_num))
-            is_convert = True
+        self.vertices, self.faces = None, None
 
         if ".obj" in mesh_path:
-            # Load with trimesh first to get UV coordinates
+            # First load with kaolin to get the geometry
+            try:
+                mesh = kal.io.obj.import_mesh(mesh_path, with_normals=True, with_materials=True)
+            except:
+                mesh = kal.io.obj.import_mesh(mesh_path, with_normals=True, with_materials=False)
+
+            self.vertices = mesh.vertices.to(device)
+            self.faces = mesh.faces.to(device)
+
+            # Then load with trimesh to get UV coordinates
             trimesh_mesh = trimesh.load(mesh_path, process=False, maintain_order=True)
 
-            # More detailed checking for UV coordinates
+            # Get UV coordinates from trimesh
             if (hasattr(trimesh_mesh, 'visual') and
                 hasattr(trimesh_mesh.visual, 'uv') and
                 trimesh_mesh.visual.uv is not None):
                 print("[Paint3D] Found UV coordinates in trimesh")
                 self.vt = torch.from_numpy(trimesh_mesh.visual.uv).float().to(device)
                 self.ft = torch.from_numpy(trimesh_mesh.faces).long().to(device)
-            else:
-                print("[Paint3D] Attempting to load UV coordinates from kaolin")
-                try:
-                    mesh = kal.io.obj.import_mesh(mesh_path, with_normals=True, with_materials=True)
-                    if hasattr(mesh, 'uvs') and mesh.uvs is not None:
-                        self.vt = mesh.uvs.to(device)
-                        self.ft = mesh.face_uvs_idx.to(device)
-                        print("[Paint3D] Successfully loaded UV coordinates from kaolin")
-                    else:
-                        print("[Paint3D] No UV coordinates found in kaolin import")
-                        self.vt = None
-                        self.ft = None
-                except Exception as e:
-                    print(f"[Paint3D] Error loading UV coordinates: {str(e)}")
-                    mesh = kal.io.obj.import_mesh(mesh_path, with_normals=True, with_materials=False)
-                    self.vt = None
-                    self.ft = None
 
-            # After loading UVs, print detailed information if available
-            if self.vt is not None and self.ft is not None:
-                print(f"[Paint3D] UV Coordinates Info:")
+                # Print detailed UV information
+                print("[Paint3D] UV Coordinates Info:")
                 print(f"[Paint3D] UV vertices shape: {self.vt.shape}")
                 print(f"[Paint3D] UV faces shape: {self.ft.shape}")
                 print(f"[Paint3D] UV Min X: {self.vt[:,0].min():.4f}, Max X: {self.vt[:,0].max():.4f}")
                 print(f"[Paint3D] UV Min Y: {self.vt[:,1].min():.4f}, Max Y: {self.vt[:,1].max():.4f}")
                 print(f"[Paint3D] UV Face indices range: {self.ft.min()}-{self.ft.max()}")
-
-            self.vertices = mesh.vertices.to(device)
-            self.faces = mesh.faces.to(device)
 
         elif ".off" in mesh_path:
             mesh = kal.io.off.import_mesh(mesh_path)
