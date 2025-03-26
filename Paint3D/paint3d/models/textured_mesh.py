@@ -69,7 +69,7 @@ class TexturedMeshModel(nn.Module):
 
         # Force use of original UV if configured and available
         if self.force_original_uv and self.mesh.has_valid_uv_mapping():
-            logger.info("Using original UV mapping from OBJ file")
+            print("Using original UV mapping from OBJ file")
             return self.mesh.vt.to(self.device), self.mesh.ft.to(self.device)
 
         run_xatlas = False
@@ -87,7 +87,7 @@ class TexturedMeshModel(nn.Module):
             import xatlas
             v_np = self.mesh.vertices.cpu().numpy()
             f_np = self.mesh.faces.int().cpu().numpy()
-            logger.info(f'running xatlas to unwrap UVs for mesh: v={v_np.shape} f={f_np.shape}')
+            print(f'running xatlas to unwrap UVs for mesh: v={v_np.shape} f={f_np.shape}')
 
             atlas = xatlas.Atlas()
             atlas.add_mesh(v_np, f_np)
@@ -169,7 +169,7 @@ class TexturedMeshModel(nn.Module):
         obj_file = os.path.join(path, f'{obj_filename}.obj')
         mtl_file = os.path.join(path, f'{obj_filename}.mtl')
 
-        logger.info(f'writing obj mesh to {obj_file} with: vertices:{v_np.shape} uv:{vt_np.shape} faces:{f_np.shape}')
+        print(f'writing obj mesh to {obj_file} with: vertices:{v_np.shape} uv:{vt_np.shape} faces:{f_np.shape}')
         with open(obj_file, "w") as fp:
             fp.write(f'mtllib mesh.mtl \n')
 
@@ -195,13 +195,13 @@ class TexturedMeshModel(nn.Module):
             fp.write(f'map_Kd albedo.png \n')
 
         if self.mesh.material_cvt is not None:
-            logger.info("Postprocess for multiple texture maps or converted mesh~")
+            print("Postprocess for multiple texture maps or converted mesh~")
             convert_results_dir = os.path.join(path, "convert_results")
             if not os.path.exists(convert_results_dir):
                 os.makedirs(convert_results_dir)
             h, w = self.mesh.material_cvt.shape[:2]
             if w % h != 0:
-                logger.info("Number of material may be inaccurate, please check manually~")
+                print("Number of material may be inaccurate, please check manually~")
             for material_id, material in enumerate(np.split(np.array(texture_img), w // h, axis=1)):
                 cv2.imwrite(os.path.join(convert_results_dir, "texture_split{}.png".format(material_id)),
                             cv2.cvtColor(material, cv2.COLOR_RGB2BGR))

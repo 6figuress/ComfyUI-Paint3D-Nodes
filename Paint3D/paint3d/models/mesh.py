@@ -22,7 +22,7 @@ class Mesh:
             if os.path.exists(merge_texture_path):
                 self.material_cvt = cv2.imread(merge_texture_path)
                 self.material_num = self.material_cvt.shape[1] // self.material_cvt.shape[0]
-            logger.info("Converting current mesh model to obj file with {} material~".format(self.material_num))
+            print("Converting current mesh model to obj file with {} material~".format(self.material_num))
             is_convert = True
 
         if ".obj" in mesh_path:
@@ -33,7 +33,7 @@ class Mesh:
             if hasattr(trimesh_mesh.visual, 'uv') and trimesh_mesh.visual.uv is not None:
                 self.vt = torch.from_numpy(trimesh_mesh.visual.uv).float().to(device)
                 self.ft = torch.from_numpy(trimesh_mesh.faces).long().to(device)
-                logger.info(f"Loaded UV map from OBJ file: vertices={self.vt.shape}, faces={self.ft.shape}")
+                print.info(f"Loaded UV map from OBJ file: vertices={self.vt.shape}, faces={self.ft.shape}")
             else:
                 self.vt = None
                 self.ft = None
@@ -83,7 +83,7 @@ class Mesh:
             logger.warning("Invalid UV face indices found")
             return False
 
-        logger.info(f"Valid UV mapping found: UV vertices={self.vt.shape}, UV faces={self.ft.shape}")
+        print(f"Valid UV mapping found: UV vertices={self.vt.shape}, UV faces={self.ft.shape}")
         return True
 
     def preprocess_gltf(self, mesh_path, remove_mesh_part_names, remove_unsupported_buffers):
@@ -101,7 +101,7 @@ class Mesh:
                     if if_append:
                         temp_primitives.append(primitive)
                 gltf_json["meshes"][0]["primitives"] = temp_primitives
-                logger.info("Deleting mesh with materials named '{}' from gltf model ~".format(remove_mesh_part_names))
+                print("Deleting mesh with materials named '{}' from gltf model ~".format(remove_mesh_part_names))
 
             if remove_unsupported_buffers is not None:
                 temp_buffers = []
@@ -114,7 +114,7 @@ class Mesh:
                     if if_append:
                         temp_buffers.append(buffer)
                 gltf_json["buffers"] = temp_buffers
-                logger.info("Deleting unspported buffers within uri {} from gltf model ~".format(remove_unsupported_buffers))
+                print("Deleting unspported buffers within uri {} from gltf model ~".format(remove_unsupported_buffers))
             updated_mesh_path = os.path.splitext(mesh_path)[0] + "_removed.gltf"
             with open(updated_mesh_path, "w") as fw:
                 json.dump(gltf_json, fw, indent=4)
