@@ -29,14 +29,24 @@ class Mesh:
             trimesh_mesh = trimesh.load(mesh_path, process=False, maintain_order=True)
 
             # Get UV coordinates from trimesh
-            if hasattr(trimesh_mesh.visual, 'uv') and trimesh_mesh.visual.uv is not None:
+            if hasattr(trimesh_mesh, 'visual') and hasattr(trimesh_mesh.visual, 'texture'):
+                # Get UV coordinates and faces
                 self.vt = torch.from_numpy(trimesh_mesh.visual.uv).float().to(device)
-                self.ft = torch.from_numpy(trimesh_mesh.faces).long().to(device)
-                print(f"Loaded UV map from OBJ file: vertices={self.vt.shape}, faces={self.ft.shape}")
-            else:
-                self.vt = None
-                self.ft = None
-                logger.warning("No UV coordinates found in the OBJ file")
+                if hasattr(trimesh_mesh.visual, 'face_texture'):
+                    self.ft = torch.from_numpy(trimesh_mesh.visual.face_texture).long().to(device)
+                else:
+                    self.ft = torch.from_numpy(trimesh_mesh.faces).long().to(device)
+
+                # Print detailed UV information
+                print(f"[Paint3D] UV Coordinates Info:")
+                print(f"[Paint3D] UV Min X: {self.vt[:,0].min():.4f}, Max X: {self.vt[:,0].max():.4f}")
+                print(f"[Paint3D] UV Min Y: {self.vt[:,1].min():.4f}, Max Y: {self.vt[:,1].max():.4f}")
+                print(f"[Paint3D] UV Face indices range: {self.ft.min()}-{self.ft.max()}")
+
+                # Print a few sample UV coordinates
+                print(f"[Paint3D] Sample UV coordinates (first 5):")
+                for i in range(min(5, len(self.vt))):
+                    print(f"[Paint3D] UV[{i}]: ({self.vt[i,0]:.4f}, {self.vt[i,1]:.4f})")
 
             # Load geometry with kaolin
             try:

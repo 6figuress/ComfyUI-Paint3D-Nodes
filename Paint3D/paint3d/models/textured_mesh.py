@@ -69,8 +69,18 @@ class TexturedMeshModel(nn.Module):
 
         # Force use of original UV if configured and available
         if self.force_original_uv and self.mesh.has_valid_uv_mapping():
-            print("Using original UV mapping from OBJ file")
-            return self.mesh.vt.to(self.device), self.mesh.ft.to(self.device)
+            print("[Paint3D] Using original UV mapping from OBJ file")
+            vt = self.mesh.vt.to(self.device)
+            ft = self.mesh.ft.to(self.device)
+
+            # Print detailed information about the UV mapping being used
+            print(f"[Paint3D] Final UV mapping stats:")
+            print(f"[Paint3D] UV vertices shape: {vt.shape}")
+            print(f"[Paint3D] UV faces shape: {ft.shape}")
+            print(f"[Paint3D] UV X range: {vt[:,0].min():.4f} to {vt[:,0].max():.4f}")
+            print(f"[Paint3D] UV Y range: {vt[:,1].min():.4f} to {vt[:,1].max():.4f}")
+
+            return vt, ft
 
         run_xatlas = False
         if self.mesh.has_valid_uv_mapping() and self.mesh.vt is not None and self.mesh.ft is not None \
