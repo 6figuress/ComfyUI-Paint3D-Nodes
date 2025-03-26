@@ -160,6 +160,7 @@ class RenderConfig:
     radius: float = 1.5
     look_at_height = 0.5
     base_theta: float = 60
+    force_original_uv: bool = True
     # Suzanne
     fov_para: float = 0.8  # 0.61 or 0.8 for Orthographic ; np.pi / 3 for Pinhole
     remove_mesh_part_names: List[str] = field(default_factory=["MI_CH_Top"].copy)
