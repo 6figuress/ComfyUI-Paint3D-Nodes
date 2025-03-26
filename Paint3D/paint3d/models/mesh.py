@@ -15,33 +15,57 @@ class Mesh:
         self.vertices, self.faces = None, None
 
         if ".obj" in mesh_path:
-            # First load with kaolin to get the geometry
-            try:
-                mesh = kal.io.obj.import_mesh(mesh_path, with_normals=True, with_materials=True)
-            except:
-                mesh = kal.io.obj.import_mesh(mesh_path, with_normals=True, with_materials=False)
+            # Load raw OBJ file to get UV coordinates exactly as they are
+            with open(mesh_path, 'r') as f:
+                lines = f.readlines()
 
-            self.vertices = mesh.vertices.to(device)
-            self.faces = mesh.faces.to(device)
+            vertices = []
+            faces = []
+            uvs = []
+            uv_indices = []
 
-            # Then load with trimesh to get UV coordinates
-            trimesh_mesh = trimesh.load(mesh_path, process=False, maintain_order=True)
+            for line in lines:
+                if line.startswith('v '):
+                    # Vertex
+                    v = [float(x) for x in line.split()[1:4]]
+                    vertices.append(v)
+                elif line.startswith('vt '):
+                    # UV coordinate
+                    vt = [float(x) for x in line.split()[1:3]]
+                    uvs.append(vt)
+                elif line.startswith('f '):
+                    # Face (format: f v1/vt1/vn1 v2/vt2/vn2 v3/vt3/vn3)
+                    f_parts = line.split()[1:]
+                    face_vertices = []
+                    face_uvs = []
+                    for part in f_parts:
+                        indices = part.split('/')
+                        face_vertices.append(int(indices[0]) - 1)  # OBJ indices start at 1
+                        if len(indices) > 1 and indices[1]:
+                            face_uvs.append(int(indices[1]) - 1)
+                    faces.append(face_vertices)
+                    if face_uvs:
+                        uv_indices.append(face_uvs)
 
-            # Get UV coordinates from trimesh
-            if (hasattr(trimesh_mesh, 'visual') and
-                hasattr(trimesh_mesh.visual, 'uv') and
-                trimesh_mesh.visual.uv is not None):
-                print("[Paint3D] Found UV coordinates in trimesh")
-                self.vt = torch.from_numpy(trimesh_mesh.visual.uv).float().to(device)
-                self.ft = torch.from_numpy(trimesh_mesh.faces).long().to(device)
+            # Convert to tensors
+            self.vertices = torch.tensor(vertices, dtype=torch.float32, device=device)
+            self.faces = torch.tensor(faces, dtype=torch.long, device=device)
 
-                # Print detailed UV information
-                print("[Paint3D] UV Coordinates Info:")
-                print(f"[Paint3D] UV vertices shape: {self.vt.shape}")
-                print(f"[Paint3D] UV faces shape: {self.ft.shape}")
-                print(f"[Paint3D] UV Min X: {self.vt[:,0].min():.4f}, Max X: {self.vt[:,0].max():.4f}")
-                print(f"[Paint3D] UV Min Y: {self.vt[:,1].min():.4f}, Max Y: {self.vt[:,1].max():.4f}")
-                print(f"[Paint3D] UV Face indices range: {self.ft.min()}-{self.ft.max()}")
+            if uvs and uv_indices:
+                self.vt = torch.tensor(uvs, dtype=torch.float32, device=device)
+                self.ft = torch.tensor(uv_indices, dtype=torch.long, device=device)
+                print(f"[Paint3D] Loaded UV coordinates directly from OBJ file:")
+                print(f"[Paint3D] UV vertices: {self.vt.shape}")
+                print(f"[Paint3D] UV faces: {self.ft.shape}")
+                print(f"[Paint3D] UV bounds X: {self.vt[:,0].min():.4f} to {self.vt[:,0].max():.4f}")
+                print(f"[Paint3D] UV bounds Y: {self.vt[:,1].min():.4f} to {self.vt[:,1].max():.4f}")
+
+                # Print first few UV coordinates to verify
+                print("[Paint3D] First 5 UV coordinates from file:")
+                for i in range(min(5, len(uvs))):
+                    print(f"[Paint3D] UV[{i}]: ({self.vt[i,0]:.6f}, {self.vt[i,1]:.6f})")
+            else:
+                print("[Paint3D] No UV coordinates found in OBJ file")
 
         elif ".off" in mesh_path:
             mesh = kal.io.off.import_mesh(mesh_path)

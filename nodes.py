@@ -743,35 +743,57 @@ class PreviewUVMap:
         # Create an empty image
         img = torch.zeros((grid_size, grid_size, 3), device=device)
 
+        # Create a checkerboard pattern for the background
+        checker_size = 32
+        for i in range(grid_size):
+            for j in range(grid_size):
+                if ((i // checker_size) + (j // checker_size)) % 2 == 0:
+                    img[i, j] = torch.tensor([0.1, 0.1, 0.1], device=device)
+
+        # Scale UV coordinates to image size
+        scaled_vt = vt * (grid_size - 1)
+
         # Draw UV faces
-        for index, face in enumerate(ft):
-            print(f"{index} / {len(ft)}")
+        for face in ft:
+            v1 = scaled_vt[face[0]]
+            v2 = scaled_vt[face[1]]
+            v3 = scaled_vt[face[2]]
 
+            # Draw filled triangle with random color
+            color = torch.tensor([
+                0.5 + 0.5 * torch.rand(1, device=device),
+                0.5 + 0.5 * torch.rand(1, device=device),
+                0.5 + 0.5 * torch.rand(1, device=device)
+            ])
 
-            v1 = vt[face[0]]
-            v2 = vt[face[1]]
-            v3 = vt[face[2]]
+            # Simple triangle rasterization
+            min_x = max(0, int(torch.min(torch.stack([v1[0], v2[0], v3[0]]))))
+            max_x = min(grid_size-1, int(torch.max(torch.stack([v1[0], v2[0], v3[0]]))))
+            min_y = max(0, int(torch.min(torch.stack([v1[1], v2[1], v3[1]]))))
+            max_y = min(grid_size-1, int(torch.max(torch.stack([v1[1], v2[1], v3[1]]))))
 
-            # Scale to image coordinates
-            v1 = (v1 * (grid_size-1)).long()
-            v2 = (v2 * (grid_size-1)).long()
-            v3 = (v3 * (grid_size-1)).long()
+            for y in range(min_y, max_y + 1):
+                for x in range(min_x, max_x + 1):
+                    p = torch.tensor([float(x), float(y)], device=device)
+                    if self.point_in_triangle(p, v1, v2, v3):
+                        img[y, x] = color
 
-            # Draw triangles
-            for i in range(3):
-                start = [v1, v2, v3][i]
-                end = [v1, v2, v3][(i+1)%3]
-
-                # Simple line drawing
-                for t in torch.linspace(0, 1, steps=100):
-                    x = int((1-t) * start[0] + t * end[0])
-                    y = int((1-t) * start[1] + t * end[1])
-                    if 0 <= x < grid_size and 0 <= y < grid_size:
-                        img[y, x] = torch.tensor([1.0, 1.0, 1.0], device=device)
-
-        # Convert to BHWC format
-        img = img.unsqueeze(0)  # Add batch dimension
+        # Add batch dimension
+        img = img.unsqueeze(0)
         return img
+
+    def point_in_triangle(self, p, a, b, c):
+        def sign(p1, p2, p3):
+            return (p1[0] - p3[0]) * (p2[1] - p3[1]) - (p2[0] - p3[0]) * (p1[1] - p3[1])
+
+        d1 = sign(p, a, b)
+        d2 = sign(p, b, c)
+        d3 = sign(p, c, a)
+
+        has_neg = (d1 < 0) or (d2 < 0) or (d3 < 0)
+        has_pos = (d1 > 0) or (d2 > 0) or (d3 > 0)
+
+        return not (has_neg and has_pos)
 
     def preview(self, mesh_model: TexturedMeshModel, grid_size=512):
         vt = mesh_model.vt
