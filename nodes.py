@@ -744,7 +744,10 @@ class PreviewUVMap:
         img = torch.zeros((grid_size, grid_size, 3), device=device)
 
         # Draw UV faces
-        for face in ft:
+        for index, face in enumerate(ft):
+            print(f"{index} / {len(ft)}")
+
+
             v1 = vt[face[0]]
             v2 = vt[face[1]]
             v3 = vt[face[2]]
@@ -778,7 +781,7 @@ class PreviewUVMap:
         uv_map = self.create_uv_visualization(vt, ft, grid_size)
 
         # Print UV statistics
-        print(f"[Paint3D] UV Map Preview Stats:")
+        print("[Paint3D] UV Map Preview Stats:")
         print(f"[Paint3D] UV vertices: {vt.shape}")
         print(f"[Paint3D] UV faces: {ft.shape}")
         print(f"[Paint3D] UV bounds X: {vt[:,0].min():.4f} to {vt[:,0].max():.4f}")
