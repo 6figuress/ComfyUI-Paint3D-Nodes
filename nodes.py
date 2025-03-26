@@ -723,6 +723,68 @@ class DuplicateImageMirrored:
 
         return (duplicated,)
 
+class PreviewUVMap:
+    RETURN_TYPES = ("IMAGE",)
+    FUNCTION = "preview"
+    CATEGORY = "Paint3D"
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "mesh_model": ("MESHMODEL",),
+                "grid_size": ("INT", {"default": 512, "min": 64, "max": 2048}),
+            }
+        }
+
+    def create_uv_visualization(self, vt, ft, grid_size):
+        device = vt.device
+
+        # Create an empty image
+        img = torch.zeros((grid_size, grid_size, 3), device=device)
+
+        # Draw UV faces
+        for face in ft:
+            v1 = vt[face[0]]
+            v2 = vt[face[1]]
+            v3 = vt[face[2]]
+
+            # Scale to image coordinates
+            v1 = (v1 * (grid_size-1)).long()
+            v2 = (v2 * (grid_size-1)).long()
+            v3 = (v3 * (grid_size-1)).long()
+
+            # Draw triangles
+            for i in range(3):
+                start = [v1, v2, v3][i]
+                end = [v1, v2, v3][(i+1)%3]
+
+                # Simple line drawing
+                for t in torch.linspace(0, 1, steps=100):
+                    x = int((1-t) * start[0] + t * end[0])
+                    y = int((1-t) * start[1] + t * end[1])
+                    if 0 <= x < grid_size and 0 <= y < grid_size:
+                        img[y, x] = torch.tensor([1.0, 1.0, 1.0], device=device)
+
+        # Convert to BHWC format
+        img = img.unsqueeze(0)  # Add batch dimension
+        return img
+
+    def preview(self, mesh_model: TexturedMeshModel, grid_size=512):
+        vt = mesh_model.vt
+        ft = mesh_model.ft
+
+        # Create UV visualization
+        uv_map = self.create_uv_visualization(vt, ft, grid_size)
+
+        # Print UV statistics
+        print(f"[Paint3D] UV Map Preview Stats:")
+        print(f"[Paint3D] UV vertices: {vt.shape}")
+        print(f"[Paint3D] UV faces: {ft.shape}")
+        print(f"[Paint3D] UV bounds X: {vt[:,0].min():.4f} to {vt[:,0].max():.4f}")
+        print(f"[Paint3D] UV bounds Y: {vt[:,1].min():.4f} to {vt[:,1].max():.4f}")
+
+        return (uv_map,)
 
 NODE_CLASS_MAPPINGS = {
     "3D_GenerateDepthImage": GenerateDepthImage,
@@ -736,4 +798,5 @@ NODE_CLASS_MAPPINGS = {
     "3D_TrainConfigPipe": TrainConfigPipe,
     "3D_GenerateSingleDepthImage": GenerateSingleDepthImage,
     "3D_DuplicateImageMirrored": DuplicateImageMirrored,
+    "3D_PreviewUVMap": PreviewUVMap,
 }
