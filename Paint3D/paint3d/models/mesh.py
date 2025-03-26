@@ -4,7 +4,6 @@ import json
 import torch
 import trimesh
 import kaolin as kal
-from loguru import logger
 
 
 class Mesh:
@@ -33,7 +32,7 @@ class Mesh:
             if hasattr(trimesh_mesh.visual, 'uv') and trimesh_mesh.visual.uv is not None:
                 self.vt = torch.from_numpy(trimesh_mesh.visual.uv).float().to(device)
                 self.ft = torch.from_numpy(trimesh_mesh.faces).long().to(device)
-                print.info(f"Loaded UV map from OBJ file: vertices={self.vt.shape}, faces={self.ft.shape}")
+                print(f"Loaded UV map from OBJ file: vertices={self.vt.shape}, faces={self.ft.shape}")
             else:
                 self.vt = None
                 self.ft = None
